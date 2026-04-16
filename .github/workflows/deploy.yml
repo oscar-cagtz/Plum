@@ -1,60 +1,87 @@
 # .github/workflows/deploy.yml
-# Fold Group automated deployment to GitHub Pages.
-# Triggers on every push to the main branch.
+# The Fold Group Inc. automated deployment to GitHub Pages.
+name: Deploy Plum to GitHub Pages
 
-name: Deploy Fold Brand Site to GitHub Pages
-
+# Automatically start the process if there's a push to the main branch.
 on:
   push:
     branches: ["main"]
+  ## Add a "Run workflow" button to trigger a deploy without a push.
   workflow_dispatch:
 
-# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
+# Give permission to GitHub to read the repo and publish the artifacts.
 permissions:
   contents: read
   pages: write
   id-token: write
 
+# If a new push happens while already running, cancel the old one and start the new one.
 concurrency:
   group: "pages"
   cancel-in-progress: true
 
+# Build instructions for the website deployment.
 jobs:
   build:
-    name: Build
+    ## Tell GitHub to start up a virtual Linux computer to run on.
+    name: Build the Site
     runs-on: ubuntu-latest
+
+    ## Nested directory where the website is located
+    defaults:
+      run:
+        working-directory: ./plum
+
+   ## Build steps for the website.
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+      ## Clone the repository to the virtual Linux machine.
+      - name: Check Out The Repository
+        uses: actions/checkout@v5
       
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      ## Install Node v24 and cache it for future builds.
+      - name: Set Up Node.js v24
+        uses: actions/setup-node@v5
         with:
-          node-version: 20
-          cache: 'npm'
+          node-version: 24
+          cache: npm
+          cache-dependency-path: './plum/package-lock.json'
           
-      - name: Install Dependencies
+      ## Clean up the configuration files from root to avoid version misconfigurations.
+      - name: Sever Phantom Workspace Links
+        run: rm -rf ../package.json ../package-lock.json ../node_modules
+
+      ## Download the libraries needed for the site.
+      - name: Install Dependencies & Libraries
         run: npm ci
+        working-directory: ./plum
         
-      - name: Build Application
+      ## Build the site to generate the /dist artifacts.
+      - name: Build the Website
         run: npm run build
-        
-      - name: Setup Pages
-        uses: actions/configure-pages@v4
-        
-      - name: Upload Artifact
+        working-directory: ./plum
+
+      ## Handshake with GitHub to set up a GH Pages deployment.
+      - name: Setup the GitHub Pages Configuration
+        uses: actions/configure-pages@v5
+
+      ## Upload the build folder to GitHub's temporary storage.
+      - name: Upload the Artifact to the Repo
         uses: actions/upload-pages-artifact@v3
         with:
-          path: './dist'
+          path: './plum/dist'
 
+# Deploy instructions for the website after the build.
   deploy:
-    name: Deploy
+    name: Deploy the Site
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
+    ## Links the build to the deployment by forcing a successful build.
     needs: build
+    ## Deploy steps for the website.
     steps:
-      - name: Deploy to GitHub Pages
+      ## Put the site online and wrap up the deployment.
+      - name: Deploy the Site to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
